@@ -8,12 +8,14 @@ from telebot import types
 from collections import defaultdict
 import sqlite3
 
-all_products_list = []
 db = func.DbFunc('db.sqlite')
 
 bot = telebot.TeleBot(config.token)
 _default_data = lambda: defaultdict(_default_data)
 user_dict = _default_data()
+
+all_products_list = []
+cart = func.Cart()
 
 
 def error_message(message):
@@ -27,17 +29,13 @@ def send_welcome(message):
     # key_yes = types.InlineKeyboardButton(text='Да', callback_data='yes')
     # key_no = types.InlineKeyboardButton(text='Нет', callback_data='no')
     # markup.add(key_yes, key_no)
-    chat_id = message.chat.id
-    global cart
-    cart = func.Cart(chat_id)
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    order_btn = types.KeyboardButton(config.button_order)
+    menu_btn = types.KeyboardButton(config.button_menu)
     cart_btn = types.KeyboardButton(config.button_cart)
-    info_btn = types.KeyboardButton(config.button_more)
-    contacts_btn = types.KeyboardButton(config.button_contact)
-    markup.add(order_btn, cart_btn)
-    markup.add(info_btn, contacts_btn)
+    checkout_btn = types.KeyboardButton(config.button_checkout)
+    markup.add(menu_btn)
+    markup.add(checkout_btn, cart_btn)
 
     bot.send_message(message.chat.id, config.welcome_message, reply_markup=markup)
 
@@ -45,22 +43,18 @@ def send_welcome(message):
 # бот отвечает на текстовые сообщения и кнопки types.KeyboardButton
 @bot.message_handler(content_types=['text'])
 def send_text(message):
-    if message.text == config.button_order or message.text == config.button_back:
+    chat_id = message.chat.id
+    if message.text == config.button_menu or message.text == config.button_back:
         choose_category_step(message)
     elif message.text == config.button_cart:
-        bot.send_message(message.chat.id, cart.get_cart_items())
-    elif message.text == config.button_more:
-        bot.send_message(message.chat.id, config.description_message)
-    elif message.text == config.button_contact:
-        bot.send_message(message.chat.id, config.contacts_message)
+        bot.send_message(chat_id, show_products_in_cart(message))
     elif message.text in all_products_list:
-        cart.add_to_cart(message.text)
-        bot.send_message(message.chat.id, 'Добалено в корзину покупок!')
-        bot.send_message(message.chat.id, cart.get_cart_items())
-
+        cart.add_to_cart(chat_id, message.text)
+        bot.send_message(chat_id, 'Добалено в корзину покупок!')
+        # bot.send_message(chat_id, show_products_in_cart(message))
     else:
-        bot.send_message(message.chat.id, config.dont_know_message)
-        bot.send_message(message.chat.id, '/start')
+        bot.send_message(chat_id, config.dont_know_message)
+        bot.send_message(chat_id, '/start')
 
 
 # бот отвечает на инлайн кнопки types.InlineKeyboardButton
@@ -74,25 +68,45 @@ def send_text(message):
 
 
 def choose_category_step(message):
+    """отображаем категории товаров"""
     markup = kb.dynamic_kb(buttons=db.get_categories(), row_width=2)
-
-    msg = bot.send_message(message.chat.id, config.choose_category_message, reply_markup=markup)
-    bot.register_next_step_handler(msg, show_products_step)
+    markup.add(config.button_back, config.button_start, config.button_checkout, config.button_cart)
+    if message.text == config.button_back:
+        send_welcome(message)
+    else:
+        msg = bot.send_message(message.chat.id, config.choose_category_message, reply_markup=markup)
+        bot.register_next_step_handler(msg, show_products_step)
 
 
 def show_products_step(message):
+    """отображаем все товары категории"""
     try:
-        chat_id = message.chat.id
         items = db.get_products(message.text)
         all_products_list.extend(items)
         if len(items) > 0:
             markup = kb.dynamic_kb(buttons=items, one_time_keyboard=False, row_width=1)
-            markup.row(config.button_back)
-            msg = bot.send_message(message.chat.id, 'config.products[config.DESCRIPTION]', reply_markup=markup)
+            markup.add(config.button_back, config.button_start, row_width=2)
+            msg = bot.send_message(message.chat.id, 'Выберите:', reply_markup=markup)
             # bot.register_next_step_handler(msg, process_product_step)
         else:
             bot.send_message(message.chat.id, config.no_product_message)
             choose_category_step(message)
+    except Exception:
+        error_message(message)
+
+
+def show_products_in_cart(message):
+    """отображаем все товары в корзине"""
+    try:
+        chat_id = message.chat.id
+        result = cart.get_cart_items(chat_id)
+        if len(result) > 0:
+            kb.dynamic_kb(buttons=result, one_time_keyboard=False, row_width=1)
+            text_result = '\n'.join(result)
+            return f'В корзине:\n{text_result}'
+            # print(result)
+        else:
+            return 'Корзина покупок пуста... Давайте что-то в нее положим.'
     except Exception:
         error_message(message)
 

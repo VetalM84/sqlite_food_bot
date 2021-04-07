@@ -37,24 +37,18 @@ class DbFunc:
 
 
 class Cart:
-    def __init__(self, user_id):
-        self.user_id = user_id
+    def __init__(self):
         self.cart_items = defaultdict(list)
 
-    def add_to_cart(self, product):
-        self.cart_items[self.user_id].append(product)
+    def add_to_cart(self, user_id, product):
+        self.cart_items[user_id].append(product)
         #
         # for key, value in self.cart_items.items():
         #     print(f'Здесь: {key}, {value}')
 
-    def get_cart_items(self):
-        try:
-            cart_list = self.cart_items[self.user_id]
-            if len(cart_list) > 0:
-                result = '\n'.join(cart_list)
-                # print(result)
-                return f'В корзине:\n{result}'
-            else:
-                return 'Корзина покупок пуста... Давайте что-то в нее положим.'
-        except Exception as exc:
-            print(f'Ошибка корзины {exc}')
+    def get_cart_items(self, user_id) -> list:
+        cart_list = self.cart_items[user_id]
+        return cart_list
+
+    def remove_from_cart(self):
+        pass
