@@ -32,8 +32,10 @@ class DbFunc:
         # print(result)
         return result
 
-    def place_order(self):
-        pass
+    def place_order(self, user_id, user_name, products, location):
+        order_info = (user_id, user_name, *products, location)
+        self.cursor.execute("INSERT INTO orders VALUES (?,?,?,?)", order_info)
+        self.connection.commit()
 
 
 class Cart:
@@ -50,5 +52,7 @@ class Cart:
         cart_list = self.cart_items[user_id]
         return cart_list
 
-    def remove_from_cart(self):
-        pass
+    def remove_from_cart(self, user_id, item):
+        cart_list = self.cart_items[user_id]
+        cart_list.remove(item)
+        return cart_list
