@@ -40,7 +40,6 @@ def send_welcome(message):
 # бот отвечает на текстовые сообщения и кнопки types.KeyboardButton
 @bot.message_handler(content_types=['text'])
 def send_text(message):
-    global step
     chat_id = message.chat.id
     if message.text == config.button_menu:
         choose_category_step(message)
@@ -68,11 +67,9 @@ def choose_category_step(message):
     global step
     step = 'categories'
     markup = kb.dynamic_kb(buttons=db.get_categories(), row_width=2)
-    markup.add(config.button_start, config.button_checkout, config.button_cart)
+    markup.add(config.button_checkout, config.button_cart)
 
-    if message.text == config.button_start:
-        send_welcome(message)
-    elif message.text == config.button_cart:
+    if message.text == config.button_cart:
         bot.send_message(chat_id, show_products_in_cart(message))
     else:
         msg = bot.send_message(message.chat.id, config.choose_category_message, reply_markup=markup)
@@ -85,16 +82,14 @@ def show_products_step(message):
     chat_id = message.chat.id
     step = 'products'
     try:
-        if message.text == config.button_start:
-            send_welcome(message)
-        elif message.text == config.button_cart:
+        if message.text == config.button_cart:
             bot.send_message(chat_id, show_products_in_cart(message))
         else:
             items = db.get_products(message.text)
             all_products_list.extend(items)
             if len(items) > 0:
                 markup = kb.dynamic_kb(buttons=items, one_time_keyboard=False, row_width=1)
-                markup.add(config.button_back, config.button_start, row_width=2)
+                markup.add(config.button_back, row_width=2)
                 bot.send_message(message.chat.id, 'Выберите:', reply_markup=markup)
                 # bot.register_next_step_handler(msg, process_product_step)
             else:
@@ -114,7 +109,7 @@ def show_products_in_cart(message):
         result_for_remove = map(lambda x:'❌ '+x, result)
         if len(result) > 0:
             markup = kb.dynamic_kb(buttons=result_for_remove, one_time_keyboard=False, row_width=1)
-            markup.add(config.button_back, config.button_start, row_width=2)
+            markup.add(config.button_back, row_width=2)
             bot.send_message(message.chat.id, 'Для удаления товара из корзины нажмите на его кнопку', reply_markup=markup)
             text_result = '\n'.join(result)
             return f'В корзине:\n{text_result}'
