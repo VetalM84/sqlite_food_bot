@@ -57,3 +57,8 @@ class Cart:
         cart_list = self.cart_items[user_id]
         cart_list.remove(item)
         return cart_list
+
+    def clear_cart(self, user_id):
+        cart_list = self.cart_items[user_id]
+        cart_list.clear()
+        return cart_list

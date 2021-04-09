@@ -50,6 +50,8 @@ def send_text(message):
             choose_category_step(message)
     elif message.text == config.button_cart:
         bot.send_message(chat_id, show_products_in_cart(message))
+    elif message.text == config.button_clear_cart:
+        remove_all_from_cart(message)
     elif message.text in all_products_list:
         cart.add_to_cart(chat_id, message.text)
         bot.send_message(chat_id, 'Добалено в корзину покупок!')
@@ -106,11 +108,12 @@ def show_products_in_cart(message):
     try:
         chat_id = message.chat.id
         result = sorted(cart.get_cart_items(chat_id))
-        result_for_remove = map(lambda x:'❌ '+x, result)
+        result_for_remove = map(lambda x: '❌ ' + x, result)
         if len(result) > 0:
             markup = kb.dynamic_kb(buttons=result_for_remove, one_time_keyboard=False, row_width=1)
-            markup.add(config.button_back, row_width=2)
-            bot.send_message(message.chat.id, 'Для удаления товара из корзины нажмите на его кнопку', reply_markup=markup)
+            markup.add(config.button_back, config.button_clear_cart, row_width=2)
+            bot.send_message(message.chat.id, 'Для удаления товара из корзины нажмите на его кнопку',
+                             reply_markup=markup)
             text_result = '\n'.join(result)
             return f'В корзине:\n{text_result}'
         else:
@@ -131,6 +134,19 @@ def remove_product_from_cart(message):
             # return f''
         else:
             return 'Такого товара в корзине нет.'
+    except Exception:
+        error_message(message)
+
+
+def remove_all_from_cart(message):
+    try:
+        chat_id = message.chat.id
+        cart.clear_cart(chat_id)
+        # удалить старую клавиатуру
+        markup = types.ReplyKeyboardRemove(selective=False)
+        bot.send_message(message.chat.id, 'Корзина товаров очищена', reply_markup=markup)
+        choose_category_step(message)
+        # return result
     except Exception:
         error_message(message)
 
