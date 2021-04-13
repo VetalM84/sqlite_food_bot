@@ -33,9 +33,17 @@ class DbFunc:
         # print(result)
         return result
 
-    def place_order(self, user_id, user_name, products, location):
-        order_info = (user_id, user_name, *products, location)
-        self.cursor.execute("INSERT INTO orders VALUES (?,?,?,?)", order_info)
+    def get_last_order_id(self):
+        self.cursor.execute('SELECT max(order_id) FROM orders')
+        result = self.cursor.fetchone()
+        if result[0] is not None:
+            return int(result[0])
+        else:
+            return 0
+
+    def place_order(self, order_id, user_id, order_time, user_name, user_phone, products, location):
+        order_info = (order_id, user_id, order_time, user_name, user_phone, products, location)
+        self.cursor.execute("INSERT INTO orders VALUES (?,?,?,?,?,?,?)", order_info)
         self.connection.commit()
 
 
@@ -45,9 +53,6 @@ class Cart:
 
     def add_to_cart(self, user_id, product):
         self.cart_items[user_id].append(product)
-        #
-        # for key, value in self.cart_items.items():
-        #     print(f'Здесь: {key}, {value}')
 
     def get_cart_items(self, user_id) -> list:
         cart_list = self.cart_items[user_id]

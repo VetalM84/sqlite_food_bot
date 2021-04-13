@@ -15,3 +15,10 @@ def contact_button(text):
     btn = types.KeyboardButton(text=text, request_contact=True)
     button_phone = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True).add(btn)
     return button_phone
+
+
+def location_button(text):
+    """кнопка отправки местоположения"""
+    btn = types.KeyboardButton(text=text, request_location=True)
+    button_gps = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True).add(btn)
+    return button_gps

@@ -4,6 +4,7 @@ import config
 import keyboard as kb
 import func
 import telebot
+import datetime
 from telebot import types
 from collections import defaultdict
 
@@ -52,6 +53,8 @@ def send_text(message):
         bot.send_message(chat_id, show_products_in_cart(message))
     elif message.text == config.button_clear_cart:
         remove_all_from_cart(message)
+    elif message.text == config.button_checkout:
+        process_order_step(message)
     elif message.text in all_products_list:
         cart.add_to_cart(chat_id, message.text)
         bot.send_message(chat_id, 'Добалено в корзину покупок!')
@@ -103,13 +106,13 @@ def show_products_step(message):
 
 def show_products_in_cart(message):
     """отображаем все товары в корзине"""
-    global step
-    step = 'cart'
     try:
+        global step
         chat_id = message.chat.id
         result = sorted(cart.get_cart_items(chat_id))
-        result_for_remove = map(lambda x: '❌ ' + x, result)
         if len(result) > 0:
+            step = 'cart'
+            result_for_remove = map(lambda x: '❌ ' + x, result)
             markup = kb.dynamic_kb(buttons=result_for_remove, one_time_keyboard=False, row_width=1)
             markup.add(config.button_back, config.button_clear_cart, row_width=2)
             bot.send_message(message.chat.id, 'Для удаления товара из корзины нажмите на его кнопку',
@@ -117,12 +120,16 @@ def show_products_in_cart(message):
             text_result = '\n'.join(result)
             return f'В корзине:\n{text_result}'
         else:
+            if step != 'products':
+                choose_category_step(message)
             return 'Корзина покупок пуста... Давайте что-то в нее положим.'
+
     except Exception:
         error_message(message)
 
 
 def remove_product_from_cart(message):
+    """удаляем товары из корзины по одному"""
     try:
         chat_id = message.chat.id
         result = sorted(cart.get_cart_items(chat_id))
@@ -130,15 +137,15 @@ def remove_product_from_cart(message):
         if item_to_remove in result:
             cart.remove_from_cart(chat_id, item_to_remove)
             bot.send_message(message.chat.id, 'Товар удален')
-            show_products_in_cart(message)
-            # return f''
+            return show_products_in_cart(message)
         else:
-            return 'Такого товара в корзине нет.'
+            return bot.send_message(message.chat.id, 'Такого товара в корзине нет.')
     except Exception:
         error_message(message)
 
 
 def remove_all_from_cart(message):
+    """очищаем корзину"""
     try:
         chat_id = message.chat.id
         cart.clear_cart(chat_id)
@@ -146,15 +153,26 @@ def remove_all_from_cart(message):
         markup = types.ReplyKeyboardRemove(selective=False)
         bot.send_message(message.chat.id, 'Корзина товаров очищена', reply_markup=markup)
         choose_category_step(message)
-        # return result
     except Exception:
         error_message(message)
 
 
-def process_fullname_step(message):
+def process_order_step(message):
     try:
         chat_id = message.chat.id
-        user_dict[chat_id]['ФИО'] = message.text
+        # удалить старую клавиатуру
+        markup = types.ReplyKeyboardRemove(selective=False)
+
+        msg = bot.send_message(chat_id, 'Введите свое имя', reply_markup=markup)
+        bot.register_next_step_handler(msg, process_user_name_step)
+    except Exception:
+        error_message(message)
+
+
+def process_user_name_step(message):
+    try:
+        chat_id = message.chat.id
+        user_dict[chat_id]['Имя'] = message.text
 
         markup = kb.contact_button(config.button_send_phone_number)
 
@@ -175,53 +193,45 @@ def process_phone_step(message):
             # если телефон передали сообщением
             user_dict[chat_id]['Телефон'] = message.text
 
-        # удалить старую клавиатуру
-        markup = types.ReplyKeyboardRemove(selective=False)
+        markup = kb.location_button(config.button_send_location)
 
-        msg = bot.send_message(chat_id, config.city_message, reply_markup=markup)
-        bot.register_next_step_handler(msg, process_city_step)
+        msg = bot.send_message(chat_id, 'Введите адрес доставки', reply_markup=markup)
+        bot.register_next_step_handler(msg, process_location_step)
     except Exception:
         error_message(message)
 
 
-def process_city_step(message):
+def process_location_step(message):
     try:
         chat_id = message.chat.id
-        user_dict[chat_id]['Город, область'] = message.text
-
-        markup = kb.dynamic_kb(buttons=config.delivery_company, row_width=2)
-
-        msg = bot.send_message(chat_id, config.choose_delivery_message, reply_markup=markup)
-        # bot.register_next_step_handler(msg, process_delivery_company_step)
-    except Exception:
-        error_message(message)
-
-
-def process_comment_step(message):
-    try:
-        chat_id = message.chat.id
-        user_dict[chat_id]['Комментарий'] = message.text
+        user_dict[chat_id]['Адрес'] = message.text
 
         # удалить старую клавиатуру
         markup = types.ReplyKeyboardRemove(selective=False)
 
         bot.send_message(chat_id, config.thanks_message, reply_markup=markup)
-        bot.send_message(chat_id, get_reg_data(chat_id, 'Ваша заявка', message.from_user.first_name))
-        # отправить дубль в группу
-        bot.send_message(config.forward_group_id, get_reg_data(chat_id, 'Заявка от бота', bot.get_me().username))
-        bot.send_message(message.chat.id, '/start')
+        bot.send_message(chat_id, make_order_data(chat_id, 'Ваша заявка', cart.cart_items[chat_id]))
+        bot.send_message(chat_id, '/start')
     except Exception:
         error_message(message)
 
 
-def get_reg_data(user_id, title, name):
-    response = title + ', ' + name + '\n'
+def make_order_data(user_id, title, products):
+    response = title + '\n'
     try:
-        for key, value in user_dict[user_id].cart_items():
+        name = user_dict[user_id]['Имя']
+        phone = user_dict[user_id]['Телефон']
+        address = user_dict[user_id]['Адрес']
+
+        for key, value in user_dict[user_id].items():
             response = response + key + ': ' + value + '\n'
+        order_id = db.get_last_order_id() + 1
+        now = datetime.datetime.now()
+        products = str(products).replace("]", "").replace("[", "").replace("'", "")
+        db.place_order(order_id, user_id, now.strftime("%H:%M %d-%m-%Y"), name, phone, products, address)
         return response
-    except Exception:
-        print('Ой, неизвестная ошибка.')
+    except Exception as ex:
+        print(f'Ой, неизвестная ошибка. {ex}')
 
 
 # если прислали произвольное фото
